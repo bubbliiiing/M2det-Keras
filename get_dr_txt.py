@@ -14,7 +14,7 @@ class mAP_M2DET(M2DET):
     #---------------------------------------------------#
     def detect_image(self,image_id,image):
         self.confidence = 0.05
-        f = open("./input/detection-results/"+image_id+".txt","a") 
+        f = open("./input/detection-results/"+image_id+".txt","w") 
 
         image_shape = np.array(np.shape(image)[0:2])
         # 加灰条的方式， resize 到 320x320
