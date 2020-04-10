@@ -38,7 +38,7 @@ if __name__ == "__main__":
     reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2, verbose=1)
     early_stopping = EarlyStopping(monitor='val_loss', min_delta=0, patience=6, verbose=1)
 
-    BATCH_SIZE = 8
+    BATCH_SIZE = 4
     gen = Generator(bbox_util, BATCH_SIZE, lines[:num_train], lines[num_train:],
                     (input_shape[0], input_shape[1]),NUM_CLASSES)
 
