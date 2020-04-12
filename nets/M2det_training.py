@@ -50,7 +50,7 @@ def conf_loss(neg_pos_ratio = 3,negatives_for_hard = 100):
                                                       tf.greater(num_neg, 0)))
         num_neg_batch = tf.to_int32(num_neg_batch)
 
-        max_confs = tf.reduce_max(y_pred[:, :, 1:-1],
+        max_confs = tf.reduce_max(y_pred[:, :, 1:],
                                   axis=2)
 
         # 取top_k个置信度，作为负样本
