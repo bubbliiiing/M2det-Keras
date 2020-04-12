@@ -65,7 +65,7 @@ class PriorProbability(keras.initializers.Initializer):
 class BBoxUtility(object):
     def __init__(self, num_classes, priors=None, overlap_threshold=0.5,
                  nms_thresh=0.45, top_k=400):
-        self.num_classes = num_classes
+        self.num_classes = num_classes - 1
         self.priors = priors
         self.num_priors = 0 if priors is None else len(priors)
         self.overlap_threshold = overlap_threshold
@@ -239,7 +239,7 @@ class BBoxUtility(object):
         for i in range(len(mbox_loc)):
             results.append([])
             decode_bbox = self.decode_boxes(mbox_loc[i], mbox_priorbox)
-            for c in range(self.num_classes):
+            for c in range(self.num_classes+1):
                 if c == background_label_id:
                     continue
                 c_confs = mbox_conf[i, :, c]
