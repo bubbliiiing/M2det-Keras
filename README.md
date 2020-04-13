@@ -12,7 +12,7 @@ tensorflow-gpu==1.13.1
 keras==2.1.5  
 
 ### 文件下载
-训练所需的M2det_weights.pth可以在百度云下载。  
+训练所需的M2det_weights.h5可以在百度云下载。  
 链接: https://pan.baidu.com/s/15COXNc0mkQ7L8s5PuHxAbw   
 提取码: 9gi9
 ### 训练步骤
