@@ -3,7 +3,7 @@ from m2det import M2DET
 from PIL import Image
 import numpy as np
 import cv2
-
+import time
 m2det = M2DET()
 
 # 调用摄像头
