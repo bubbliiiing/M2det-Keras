@@ -209,7 +209,6 @@ class Generator(object):
             for annotation_line in lines:  
                 img,y=self.get_random_data(annotation_line,self.image_size[0:2])
                 if len(y)!=0:
-                    continue
                     boxes = np.array(y[:,:4],dtype=np.float32)
                     boxes[:,0] = boxes[:,0]/self.image_size[1]
                     boxes[:,1] = boxes[:,1]/self.image_size[0]
