@@ -19,6 +19,9 @@ if __name__ == "__main__":
     priors = get_anchors((input_shape[0],input_shape[1]))
     bbox_util = BBoxUtility(NUM_CLASSES, priors)
 
+    #-------------------------------------------#
+    #   权值文件的下载请看README
+    #-------------------------------------------#
     model.load_weights("model_data\M2det_weights.h5",by_name=True,skip_mismatch=True)
     model.summary()
     # 0.1用于验证，0.9用于训练
