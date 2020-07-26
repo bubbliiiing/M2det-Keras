@@ -1,4 +1,3 @@
-
 from keras.applications.imagenet_utils import preprocess_input
 from keras import backend as K
 import keras
@@ -9,6 +8,7 @@ from utils import backend
 from PIL import Image
 from keras.utils.data_utils import get_file
 from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
+import cv2
 
 def rand(a=0, b=1):
     return np.random.rand()*(b-a) + a
@@ -160,15 +160,16 @@ class Generator(object):
         hue = rand(-hue, hue)
         sat = rand(1, sat) if rand()<.5 else 1/rand(1, sat)
         val = rand(1, val) if rand()<.5 else 1/rand(1, val)
-        x = rgb_to_hsv(np.array(image)/255.)
-        x[..., 0] += hue
+        x = cv2.cvtColor(np.array(image,np.float32)/255, cv2.COLOR_RGB2HSV)
+        x[..., 0] += hue*360
         x[..., 0][x[..., 0]>1] -= 1
         x[..., 0][x[..., 0]<0] += 1
         x[..., 1] *= sat
         x[..., 2] *= val
-        x[x>1] = 1
+        x[x[:,:, 0]>360, 0] = 360
+        x[:, :, 1:][x[:, :, 1:]>1] = 1
         x[x<0] = 0
-        image_data = hsv_to_rgb(x)*255 # numpy array, 0 to 1
+        image_data = cv2.cvtColor(x, cv2.COLOR_HSV2RGB)*255
 
         # correct boxes
         box_data = np.zeros((len(box),5))
