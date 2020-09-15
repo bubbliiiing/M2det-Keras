@@ -4,6 +4,7 @@ from PIL import Image
 from keras.applications.imagenet_utils import preprocess_input
 from utils.utils import BBoxUtility,letterbox_image,m2det_correct_boxes
 from utils.anchors import get_anchors
+from tqdm import tqdm
 import math
 import copy
 import numpy as np
@@ -13,7 +14,7 @@ class mAP_M2DET(M2DET):
     #   检测图片
     #---------------------------------------------------#
     def detect_image(self,image_id,image):
-        self.confidence = 0.05
+        self.confidence = 0.01
         f = open("./input/detection-results/"+image_id+".txt","w") 
 
         image_shape = np.array(np.shape(image)[0:2])
@@ -63,13 +64,10 @@ if not os.path.exists("./input/detection-results"):
 if not os.path.exists("./input/images-optional"):
     os.makedirs("./input/images-optional")
 
-
-for image_id in image_ids:
+for image_id in tqdm(image_ids):
     image_path = "./VOCdevkit/VOC2007/JPEGImages/"+image_id+".jpg"
     image = Image.open(image_path)
-    image.save("./input/images-optional/"+image_id+".jpg")
+    # image.save("./input/images-optional/"+image_id+".jpg")
     m2det.detect_image(image_id,image)
-    print(image_id," done!")
     
-
 print("Conversion completed!")
