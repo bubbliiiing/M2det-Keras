@@ -17,10 +17,10 @@ from utils.anchors import get_anchors
 #--------------------------------------------#
 class M2DET(object):
     _defaults = {
-        "model_path": 'model_data/M2det_weights.h5',
-        "classes_path": 'model_data/voc_classes.txt',
-        "model_image_size" : (320, 320, 3),
-        "confidence": 0.5,
+        "model_path"        : 'model_data/M2det_weights.h5',
+        "classes_path"      : 'model_data/voc_classes.txt',
+        "model_image_size"  : (320, 320, 3),
+        "confidence"        : 0.5,
 
     }
 
