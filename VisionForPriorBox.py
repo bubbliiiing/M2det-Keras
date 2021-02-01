@@ -1,6 +1,8 @@
-import numpy as np
 import pickle
+
 import matplotlib.pyplot as plt
+import numpy as np
+
 
 class PriorBox():
     def __init__(self, img_size, min_size, max_size=None, aspect_ratios=None,
