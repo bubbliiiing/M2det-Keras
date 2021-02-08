@@ -1,6 +1,9 @@
 ## M2Det：A Single-Shot Object Detector based on Multi-Level Feature Pyramid Network目标检测模型在Keras当中的实现
 ---
 
+**2021年2月8日更新：**   
+**加入letterbox_image的选项，关闭letterbox_image后网络的map一般可以得到提升。**
+
 ## 目录
 1. [性能情况 Performance](#性能情况)
 2. [所需环境 Environment](#所需环境)
@@ -13,7 +16,7 @@
 ## 性能情况
 | 训练数据集 | 权值文件名称 | 测试数据集 | 输入图片大小 | mAP 0.5:0.95 | mAP 0.5 |
 | :-----: | :-----: | :------: | :------: | :------: | :-----: |
-| VOC07+12 | [M2det_weights.h5](https://github.com/bubbliiiing/M2det-Keras/releases/download/v1.0/M2det_weights.h5) | VOC-Test07 | 320x320 | - | 79.73
+| VOC07+12 | [M2det_weights.h5](https://github.com/bubbliiiing/M2det-Keras/releases/download/v1.0/M2det_weights.h5) | VOC-Test07 | 320x320 | - | 80.33
 
 ## 所需环境
 tensorflow-gpu==1.13.1   
