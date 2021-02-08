@@ -28,7 +28,12 @@ class M2DET(object):
         "model_image_size"  : (320, 320, 3),
         "nms_iou"           : 0.45,
         "confidence"        : 0.5,
-        "anchors_size"      : [0.08, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05]
+        "anchors_size"      : [0.08, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05],
+        #---------------------------------------------------------------------#
+        #   该变量用于控制是否使用letterbox_image对输入图像进行不失真的resize，
+        #   在多次测试后，发现关闭letterbox_image直接resize的效果更好
+        #---------------------------------------------------------------------#
+        "letterbox_image"   : False,
 
     }
 
@@ -98,8 +103,13 @@ class M2DET(object):
         image_shape = np.array(np.shape(image)[0:2])
         #---------------------------------------------------------#
         #   给图像增加灰条，实现不失真的resize
+        #   也可以直接resize进行识别
         #---------------------------------------------------------#
-        crop_img = letterbox_image(image, [self.model_image_size[0],self.model_image_size[1]])
+        if self.letterbox_image:
+            crop_img = np.array(letterbox_image(image, (self.model_image_size[1],self.model_image_size[0])))
+        else:
+            crop_img = image.convert('RGB')
+            crop_img = crop_img.resize((self.model_image_size[1],self.model_image_size[0]), Image.BICUBIC)
         photo = np.array(crop_img,dtype = np.float64)
         
         #-----------------------------------------------------------#
@@ -133,8 +143,15 @@ class M2DET(object):
         #-----------------------------------------------------------#
         #   去掉灰条部分
         #-----------------------------------------------------------#
-        boxes = m2det_correct_boxes(top_ymin,top_xmin,top_ymax,top_xmax,np.array([self.model_image_size[0],self.model_image_size[1]]),image_shape)
-
+        if self.letterbox_image:
+            boxes = m2det_correct_boxes(top_ymin,top_xmin,top_ymax,top_xmax,np.array([self.model_image_size[0],self.model_image_size[1]]),image_shape)
+        else:
+            top_xmin = top_xmin * image_shape[1]
+            top_ymin = top_ymin * image_shape[0]
+            top_xmax = top_xmax * image_shape[1]
+            top_ymax = top_ymax * image_shape[0]
+            boxes = np.concatenate([top_ymin,top_xmin,top_ymax,top_xmax], axis=-1)
+            
         font = ImageFont.truetype(font='model_data/simhei.ttf',size=np.floor(3e-2 * np.shape(image)[1] + 0.5).astype('int32'))
 
         thickness = max((np.shape(image)[0] + np.shape(image)[1]) // self.model_image_size[0], 1)
