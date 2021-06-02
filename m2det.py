@@ -1,13 +1,10 @@
 import colorsys
 import os
-import pickle
+import time
 
-import cv2
-import keras
 import numpy as np
 from keras import backend as K
 from keras.applications.imagenet_utils import preprocess_input
-from keras.layers import Input
 from PIL import Image, ImageDraw, ImageFont
 
 import nets.M2det as M2det
@@ -193,6 +190,73 @@ class M2DET(object):
             draw.text(text_origin, str(label,'UTF-8'), fill=(0, 0, 0), font=font)
             del draw
         return image
+
+    def get_FPS(self, image, test_interval):
+        image_shape = np.array(np.shape(image)[0:2])
+        #---------------------------------------------------------#
+        #   给图像增加灰条，实现不失真的resize
+        #   也可以直接resize进行识别
+        #---------------------------------------------------------#
+        if self.letterbox_image:
+            crop_img = np.array(letterbox_image(image, (self.model_image_size[1],self.model_image_size[0])))
+        else:
+            crop_img = image.convert('RGB')
+            crop_img = crop_img.resize((self.model_image_size[1],self.model_image_size[0]), Image.BICUBIC)
+        photo = np.array(crop_img,dtype = np.float64)
+        photo = preprocess_input(np.reshape(photo,[1,self.model_image_size[0],self.model_image_size[1],self.model_image_size[2]]))
+
+        preds = self.m2det.predict(photo)
+        results = self.bbox_util.detection_out(preds,self.prior,confidence_threshold=self.confidence)
+
+        if len(results[0])>0:
+            det_label = results[0][:, 0]
+            det_conf = results[0][:, 1]
+            det_xmin, det_ymin, det_xmax, det_ymax = results[0][:, 2], results[0][:, 3], results[0][:, 4], results[0][:, 5]
+            top_indices = [i for i, conf in enumerate(det_conf) if conf >= self.confidence]
+            top_conf = det_conf[top_indices]
+            top_label_indices = det_label[top_indices].tolist()
+            top_xmin, top_ymin, top_xmax, top_ymax = np.expand_dims(det_xmin[top_indices],-1),np.expand_dims(det_ymin[top_indices],-1),np.expand_dims(det_xmax[top_indices],-1),np.expand_dims(det_ymax[top_indices],-1)
+            #-----------------------------------------------------------#
+            #   去掉灰条部分
+            #-----------------------------------------------------------#
+            if self.letterbox_image:
+                boxes = m2det_correct_boxes(top_ymin,top_xmin,top_ymax,top_xmax,np.array([self.model_image_size[0],self.model_image_size[1]]),image_shape)
+            else:
+                top_xmin = top_xmin * image_shape[1]
+                top_ymin = top_ymin * image_shape[0]
+                top_xmax = top_xmax * image_shape[1]
+                top_ymax = top_ymax * image_shape[0]
+                boxes = np.concatenate([top_ymin,top_xmin,top_ymax,top_xmax], axis=-1)
+
+        t1 = time.time()
+        for _ in range(test_interval):
+            preds = self.m2det.predict(photo)
+            results = self.bbox_util.detection_out(preds,self.prior,confidence_threshold=self.confidence)
+
+            if len(results[0])>0:
+                det_label = results[0][:, 0]
+                det_conf = results[0][:, 1]
+                det_xmin, det_ymin, det_xmax, det_ymax = results[0][:, 2], results[0][:, 3], results[0][:, 4], results[0][:, 5]
+                top_indices = [i for i, conf in enumerate(det_conf) if conf >= self.confidence]
+                top_conf = det_conf[top_indices]
+                top_label_indices = det_label[top_indices].tolist()
+                top_xmin, top_ymin, top_xmax, top_ymax = np.expand_dims(det_xmin[top_indices],-1),np.expand_dims(det_ymin[top_indices],-1),np.expand_dims(det_xmax[top_indices],-1),np.expand_dims(det_ymax[top_indices],-1)
+                #-----------------------------------------------------------#
+                #   去掉灰条部分
+                #-----------------------------------------------------------#
+                if self.letterbox_image:
+                    boxes = m2det_correct_boxes(top_ymin,top_xmin,top_ymax,top_xmax,np.array([self.model_image_size[0],self.model_image_size[1]]),image_shape)
+                    
+                else:
+                    top_xmin = top_xmin * image_shape[1]
+                    top_ymin = top_ymin * image_shape[0]
+                    top_xmax = top_xmax * image_shape[1]
+                    top_ymax = top_ymax * image_shape[0]
+                    boxes = np.concatenate([top_ymin,top_xmin,top_ymax,top_xmax], axis=-1)
+
+        t2 = time.time()
+        tact_time = (t2 - t1) / test_interval
+        return tact_time
 
     def close_session(self):
         self.sess.close()

@@ -1,7 +1,5 @@
 import keras
-import numpy as np
 import tensorflow as tf
-from utils.utils import PriorProbability
 
 from nets.VGG import VGG16
 

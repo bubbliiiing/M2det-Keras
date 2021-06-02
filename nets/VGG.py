@@ -1,9 +1,5 @@
-import tensorflow as tf
-from keras import Model, Sequential
-from keras.layers import (Conv2D, Dense, Flatten, GlobalAveragePooling2D,
-                          GlobalMaxPooling2D, Input, MaxPooling2D)
-from tensorflow import keras
-
+from keras import Model
+from keras.layers import Conv2D, MaxPooling2D
 
 def VGG16(inputs):
     net = {} 
