@@ -1,56 +1,39 @@
 import numpy as np
 
 
-class PriorBox():
-    def __init__(self, img_size, min_size, max_size=None, aspect_ratios=None,
-                 flip=True, variances=[0.1], clip=True, **kwargs):
-
-        self.waxis = 1
-        self.haxis = 0
-
-        self.img_size = img_size
-        if min_size <= 0:
-            raise Exception('min_size must be positive.')
+class AnchorBox():
+    def __init__(self, input_shape, min_size, max_size=None, aspect_ratios=None, flip=True):
+        self.input_shape = input_shape
 
         self.min_size = min_size
         self.max_size = max_size
-        self.aspect_ratios = [1.0]
-        if max_size:
-            if max_size < min_size:
-                raise Exception('max_size must be greater than min_size.')
-            self.aspect_ratios.append(1.0)
-        if aspect_ratios:
-            for ar in aspect_ratios:
-                if ar in self.aspect_ratios:
-                    continue
-                self.aspect_ratios.append(ar)
-                if flip:
-                    self.aspect_ratios.append(1.0 / ar)
-        self.variances = np.array(variances)
-        self.clip = True
 
+        self.aspect_ratios = []
+        for ar in aspect_ratios:
+            self.aspect_ratios.append(ar)
+            self.aspect_ratios.append(1.0 / ar)
 
-    def call(self, input_shape, mask=None):
+    def call(self, layer_shape, mask=None):
         # --------------------------------- #
         #   获取输入进来的特征层的宽和高
-        #   比如40x40
+        #   比如38x38
         # --------------------------------- #
-        layer_width = input_shape[self.waxis]
-        layer_height = input_shape[self.haxis]
-
+        layer_height    = layer_shape[0]
+        layer_width     = layer_shape[1]
         # --------------------------------- #
         #   获取输入进来的图片的宽和高
-        #   比如320x320
+        #   比如300x300
         # --------------------------------- #
-        img_width = self.img_size[1]
-        img_height = self.img_size[0]
+        img_height  = self.input_shape[0]
+        img_width   = self.input_shape[1]
 
+        box_widths  = []
+        box_heights = []
         # --------------------------------- #
-        #   self.aspect_ratios一般是
+        #   self.aspect_ratios一般有两个值
+        #   [1, 1, 2, 1/2]
         #   [1, 1, 2, 1/2, 3, 1/3]
         # --------------------------------- #
-        box_widths = []
-        box_heights = []
         for ar in self.aspect_ratios:
             # 首先添加一个较小的正方形
             if ar == 1 and len(box_widths) == 0:
@@ -68,7 +51,7 @@ class PriorBox():
         # --------------------------------- #
         #   获得所有先验框的宽高1/2
         # --------------------------------- #
-        box_widths = 0.5 * np.array(box_widths)
+        box_widths  = 0.5 * np.array(box_widths)
         box_heights = 0.5 * np.array(box_heights)
 
         # --------------------------------- #
@@ -80,89 +63,200 @@ class PriorBox():
         # --------------------------------- #
         #   生成网格中心
         # --------------------------------- #
-        linx = np.linspace(0.5 * step_x, img_width - 0.5 * step_x, layer_width)
-        liny = np.linspace(0.5 * step_y, img_height - 0.5 * step_y, layer_height)
+        linx = np.linspace(0.5 * step_x, img_width - 0.5 * step_x,
+                           layer_width)
+        liny = np.linspace(0.5 * step_y, img_height - 0.5 * step_y,
+                           layer_height)
         centers_x, centers_y = np.meshgrid(linx, liny)
         centers_x = centers_x.reshape(-1, 1)
         centers_y = centers_y.reshape(-1, 1)
 
         # 每一个先验框需要两个(centers_x, centers_y)，前一个用来计算左上角，后一个计算右下角
-        num_priors_ = len(self.aspect_ratios)
-        prior_boxes = np.concatenate((centers_x, centers_y), axis=1)
-        prior_boxes = np.tile(prior_boxes, (1, 2 * num_priors_))
+        num_anchors_ = len(self.aspect_ratios)
+        anchor_boxes = np.concatenate((centers_x, centers_y), axis=1)
+        anchor_boxes = np.tile(anchor_boxes, (1, 2 * num_anchors_))
         
         # 获得先验框的左上角和右下角
-        prior_boxes[:, ::4] -= box_widths
-        prior_boxes[:, 1::4] -= box_heights
-        prior_boxes[:, 2::4] += box_widths
-        prior_boxes[:, 3::4] += box_heights
+        anchor_boxes[:, ::4]    -= box_widths
+        anchor_boxes[:, 1::4]   -= box_heights
+        anchor_boxes[:, 2::4]   += box_widths
+        anchor_boxes[:, 3::4]   += box_heights
 
         # --------------------------------- #
         #   将先验框变成小数的形式
         #   归一化
         # --------------------------------- #
-        prior_boxes[:, ::2] /= img_width
-        prior_boxes[:, 1::2] /= img_height
-        prior_boxes = prior_boxes.reshape(-1, 4)
+        anchor_boxes[:, ::2]    /= img_width
+        anchor_boxes[:, 1::2]   /= img_height
+        anchor_boxes = anchor_boxes.reshape(-1, 4)
 
-        prior_boxes = np.minimum(np.maximum(prior_boxes, 0.0), 1.0)
+        anchor_boxes = np.minimum(np.maximum(anchor_boxes, 0.0), 1.0)
+        return anchor_boxes
 
-        num_boxes = len(prior_boxes)
-        
-        if len(self.variances) == 1:
-            variances = np.ones((num_boxes, 4)) * self.variances[0]
-        elif len(self.variances) == 4:
-            variances = np.tile(self.variances, (num_boxes, 1))
-        else:
-            raise Exception('Must provide one or four variances.')
+#---------------------------------------------------#
+#   用于计算共享特征层的大小
+#---------------------------------------------------#
+def get_img_output_length(height, width):
+    filter_sizes    = [3, 3, 3, 3, 3, 3, 3, 3]
+    padding         = [1, 1, 1, 1, 1, 1, 1, 0]
+    stride          = [2, 2, 2, 2, 2, 2, 2, 2]
+    feature_heights = []
+    feature_widths  = []
 
-        prior_boxes = np.concatenate((prior_boxes, variances), axis=1)
-        return prior_boxes
+    for i in range(len(filter_sizes)):
+        height  = (height + 2*padding[i] - filter_sizes[i]) // stride[i] + 1
+        width   = (width + 2*padding[i] - filter_sizes[i]) // stride[i] + 1
+        feature_heights.append(height)
+        feature_widths.append(width)
+    return np.array(feature_heights)[-6:], np.array(feature_widths)[-6:]
 
-def get_anchors(img_size = (320,320), anchors_size=[0.08, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05]):
-    if img_size == (320,320):
-        features_map_length = [40,20,10,5,3,1]
-    elif img_size == (512,512):
-        features_map_length = [64,32,16,8,4,1]
-    else:
-        raise ValueError('Unsupported img_size - `{}`, Use (320,320), (512,512).'.format(img_size))
+def get_anchors(input_shape = [320,320], anchors_size = [26, 48, 106, 163, 221, 278, 336]):
+    feature_heights, feature_widths = get_img_output_length(input_shape[0], input_shape[1])
+    aspect_ratios = [[1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3]]
+    anchors = []
+    for i in range(len(feature_heights)):
+        anchors.append(AnchorBox(input_shape, anchors_size[i], max_size = anchors_size[i+1], 
+                    aspect_ratios = aspect_ratios[i]).call([feature_heights[i], feature_widths[i]]))
 
-    net = {} 
-    priorbox = PriorBox(img_size, anchors_size[0]*img_size[0], max_size = anchors_size[1]*img_size[0], aspect_ratios=[2, 3],
-                        variances=[0.1, 0.1, 0.2, 0.2],
-                        name='conv4_3_norm_mbox_priorbox')
-    net['conv4_3_norm_mbox_priorbox'] = priorbox.call([features_map_length[0],features_map_length[0]])
+    anchors = np.concatenate(anchors, axis=0)
+    return anchors
 
-    priorbox = PriorBox(img_size, anchors_size[1]*img_size[0], max_size = anchors_size[2]*img_size[0], aspect_ratios=[2, 3],
-                        variances=[0.1, 0.1, 0.2, 0.2],
-                        name='fc7_mbox_priorbox')
-    net['fc7_mbox_priorbox'] = priorbox.call([features_map_length[1],features_map_length[1]])
+if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    class AnchorBox_for_Vision():
+        def __init__(self, input_shape, min_size, max_size=None, aspect_ratios=None, flip=True):
+            # 获得输入图片的大小，300x300
+            self.input_shape = input_shape
 
-    priorbox = PriorBox(img_size, anchors_size[2]*img_size[0], max_size = anchors_size[3]*img_size[0], aspect_ratios=[2, 3],
-                        variances=[0.1, 0.1, 0.2, 0.2],
-                        name='conv6_2_mbox_priorbox')
-    net['conv6_2_mbox_priorbox'] = priorbox.call([features_map_length[2],features_map_length[2]])
+            # 先验框的短边
+            self.min_size = min_size
+            # 先验框的长边
+            self.max_size = max_size
 
-    priorbox = PriorBox(img_size, anchors_size[3]*img_size[0], max_size = anchors_size[4]*img_size[0], aspect_ratios=[2, 3],
-                        variances=[0.1, 0.1, 0.2, 0.2],
-                        name='conv7_2_mbox_priorbox')
-    net['conv7_2_mbox_priorbox'] = priorbox.call([features_map_length[3],features_map_length[3]])
+            # [1, 2] => [1, 1, 2, 1/2]
+            # [1, 2, 3] => [1, 1, 2, 1/2, 3, 1/3]
+            self.aspect_ratios = []
+            for ar in aspect_ratios:
+                self.aspect_ratios.append(ar)
+                self.aspect_ratios.append(1.0 / ar)
 
-    priorbox = PriorBox(img_size, anchors_size[4]*img_size[0], max_size = anchors_size[5]*img_size[0], aspect_ratios=[2, 3],
-                        variances=[0.1, 0.1, 0.2, 0.2],
-                        name='conv8_2_mbox_priorbox')
-    net['conv8_2_mbox_priorbox'] = priorbox.call([features_map_length[4],features_map_length[4]])
+        def call(self, layer_shape, mask=None):
+            # --------------------------------- #
+            #   获取输入进来的特征层的宽和高
+            #   比如3x3
+            # --------------------------------- #
+            layer_height    = layer_shape[0]
+            layer_width     = layer_shape[1]
+            # --------------------------------- #
+            #   获取输入进来的图片的宽和高
+            #   比如300x300
+            # --------------------------------- #
+            img_height  = self.input_shape[0]
+            img_width   = self.input_shape[1]
+            
+            box_widths  = []
+            box_heights = []
+            # --------------------------------- #
+            #   self.aspect_ratios一般有两个值
+            #   [1, 1, 2, 1/2]
+            #   [1, 1, 2, 1/2, 3, 1/3]
+            # --------------------------------- #
+            for ar in self.aspect_ratios:
+                # 首先添加一个较小的正方形
+                if ar == 1 and len(box_widths) == 0:
+                    box_widths.append(self.min_size)
+                    box_heights.append(self.min_size)
+                # 然后添加一个较大的正方形
+                elif ar == 1 and len(box_widths) > 0:
+                    box_widths.append(np.sqrt(self.min_size * self.max_size))
+                    box_heights.append(np.sqrt(self.min_size * self.max_size))
+                # 然后添加长方形
+                elif ar != 1:
+                    box_widths.append(self.min_size * np.sqrt(ar))
+                    box_heights.append(self.min_size / np.sqrt(ar))
 
-    priorbox = PriorBox(img_size, anchors_size[5]*img_size[0], max_size = anchors_size[6]*img_size[0], aspect_ratios=[2, 3],
-                        variances=[0.1, 0.1, 0.2, 0.2],
-                        name='pool6_mbox_priorbox')
-    net['pool6_mbox_priorbox'] = priorbox.call([features_map_length[5],features_map_length[5]])
+            print("box_widths:", box_widths)
+            print("box_heights:", box_heights)
+            
+            # --------------------------------- #
+            #   获得所有先验框的宽高1/2
+            # --------------------------------- #
+            box_widths  = 0.5 * np.array(box_widths)
+            box_heights = 0.5 * np.array(box_heights)
 
-    net['mbox_priorbox'] = np.concatenate([net['conv4_3_norm_mbox_priorbox'],
-                                    net['fc7_mbox_priorbox'],
-                                    net['conv6_2_mbox_priorbox'],
-                                    net['conv7_2_mbox_priorbox'],
-                                    net['conv8_2_mbox_priorbox'],
-                                    net['pool6_mbox_priorbox']],
-                                    axis=0)
-    return net['mbox_priorbox']
+            # --------------------------------- #
+            #   每一个特征层对应的步长
+            #   3x3的步长为100
+            # --------------------------------- #
+            step_x = img_width / layer_width
+            step_y = img_height / layer_height
+
+            # --------------------------------- #
+            #   生成网格中心
+            # --------------------------------- #
+            linx = np.linspace(0.5 * step_x, img_width - 0.5 * step_x, layer_width)
+            liny = np.linspace(0.5 * step_y, img_height - 0.5 * step_y, layer_height)
+            # 构建网格
+            centers_x, centers_y = np.meshgrid(linx, liny)
+            centers_x = centers_x.reshape(-1, 1)
+            centers_y = centers_y.reshape(-1, 1)
+
+            if layer_height == 3:
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                plt.ylim(-50,350)
+                plt.xlim(-50,350)
+                plt.scatter(centers_x,centers_y)
+
+            # 每一个先验框需要两个(centers_x, centers_y)，前一个用来计算左上角，后一个计算右下角
+            num_anchors_ = len(self.aspect_ratios)
+            anchor_boxes = np.concatenate((centers_x, centers_y), axis=1)
+            anchor_boxes = np.tile(anchor_boxes, (1, 2 * num_anchors_))
+            
+            # 获得先验框的左上角和右下角
+            anchor_boxes[:, ::4]    -= box_widths
+            anchor_boxes[:, 1::4]   -= box_heights
+            anchor_boxes[:, 2::4]   += box_widths
+            anchor_boxes[:, 3::4]   += box_heights
+
+            print(np.shape(anchor_boxes))
+            if layer_height == 3:
+                rect1 = plt.Rectangle([anchor_boxes[4, 0],anchor_boxes[4, 1]],box_widths[0]*2,box_heights[0]*2,color="r",fill=False)
+                rect2 = plt.Rectangle([anchor_boxes[4, 4],anchor_boxes[4, 5]],box_widths[1]*2,box_heights[1]*2,color="r",fill=False)
+                rect3 = plt.Rectangle([anchor_boxes[4, 8],anchor_boxes[4, 9]],box_widths[2]*2,box_heights[2]*2,color="r",fill=False)
+                rect4 = plt.Rectangle([anchor_boxes[4, 12],anchor_boxes[4, 13]],box_widths[3]*2,box_heights[3]*2,color="r",fill=False)
+                rect5 = plt.Rectangle([anchor_boxes[4, 16],anchor_boxes[4, 17]],box_widths[4]*2,box_heights[4]*2,color="r",fill=False)
+                rect6 = plt.Rectangle([anchor_boxes[4, 20],anchor_boxes[4, 21]],box_widths[5]*2,box_heights[5]*2,color="r",fill=False)
+                
+                ax.add_patch(rect1)
+                ax.add_patch(rect2)
+                ax.add_patch(rect3)
+                ax.add_patch(rect4)
+                ax.add_patch(rect5)
+                ax.add_patch(rect6)
+
+
+                plt.show()
+            # --------------------------------- #
+            #   将先验框变成小数的形式
+            #   归一化
+            # --------------------------------- #
+            anchor_boxes[:, ::2]    /= img_width
+            anchor_boxes[:, 1::2]   /= img_height
+            anchor_boxes = anchor_boxes.reshape(-1, 4)
+
+            anchor_boxes = np.minimum(np.maximum(anchor_boxes, 0.0), 1.0)
+            return anchor_boxes
+
+    input_shape     = [320, 320] 
+    anchors_size    = [26, 48, 106, 163, 221, 278, 336]
+    feature_heights, feature_widths = get_img_output_length(input_shape[0], input_shape[1])
+    aspect_ratios   = [[1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3]]
+
+    anchors = []
+    for i in range(len(feature_heights)):
+        anchors.append(AnchorBox_for_Vision(input_shape, anchors_size[i], max_size = anchors_size[i+1], 
+                    aspect_ratios = aspect_ratios[i]).call([feature_heights[i], feature_widths[i]]))
+
+    anchors = np.concatenate(anchors, axis=0)
+    print(np.shape(anchors))
