@@ -12,7 +12,7 @@ class BBoxUtility(object):
         self.nms            = tf.image.non_max_suppression(self.boxes, self.scores, self._top_k, iou_threshold=self._nms_thresh)
         self.sess           = K.get_session()
 
-    def ssd_correct_boxes(self, box_xy, box_wh, input_shape, image_shape, letterbox_image):
+    def m2det_correct_boxes(self, box_xy, box_wh, input_shape, image_shape, letterbox_image):
         #-----------------------------------------------------------------#
         #   把y轴放前面是因为方便预测框和图像的宽高进行相乘
         #-----------------------------------------------------------------#
@@ -128,6 +128,6 @@ class BBoxUtility(object):
             if len(results[-1]) > 0:
                 results[-1] = np.array(results[-1])
                 box_xy, box_wh = (results[-1][:, 0:2] + results[-1][:, 2:4])/2, results[-1][:, 2:4] - results[-1][:, 0:2]
-                results[-1][:, :4] = self.ssd_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image)
+                results[-1][:, :4] = self.m2det_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image)
 
         return results
