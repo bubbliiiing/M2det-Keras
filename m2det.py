@@ -8,7 +8,7 @@ from PIL import ImageDraw, ImageFont
 
 from nets.m2det import m2det
 from utils.anchors import get_anchors
-from utils.utils import cvtColor, get_classes, resize_image
+from utils.utils import cvtColor, get_classes, resize_image, show_config
 from utils.utils_bbox import BBoxUtility
 
 '''
@@ -61,6 +61,7 @@ class M2DET(object):
     #---------------------------------------------------#
     def __init__(self, **kwargs):
         self.__dict__.update(self._defaults)
+        show_config(**self._defaults)
         for name, value in kwargs.items():
             setattr(self, name, value)
         #---------------------------------------------------#
